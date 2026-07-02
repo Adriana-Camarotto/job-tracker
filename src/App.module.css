@@ -1,0 +1,117 @@
+.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  border-bottom: 1px solid var(--border);
+  padding: 1.5rem 0;
+  position: sticky;
+  top: 0;
+  background: rgba(14,14,14,0.92);
+  backdrop-filter: blur(12px);
+  z-index: 10;
+}
+
+.headerInner {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.addBtn {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #0e0e0e;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 9px 18px;
+  transition: opacity 0.15s, transform 0.1s;
+  letter-spacing: -0.01em;
+}
+.addBtn:hover { opacity: 0.88; }
+.addBtn:active { transform: scale(0.98); }
+
+.main {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  width: 100%;
+  flex: 1;
+}
+
+.statsRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.statCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 18px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  flex: 1;
+  min-width: 90px;
+}
+.statCard:hover { border-color: var(--border-hover); background: var(--bg-hover); }
+
+.statActive {
+  border-color: var(--accent) !important;
+  background: var(--accent-dim) !important;
+}
+
+.statValue {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.statLabel {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empty {
+  text-align: center;
+  padding: 4rem 0;
+  color: var(--text-dim);
+  font-size: 14px;
+}

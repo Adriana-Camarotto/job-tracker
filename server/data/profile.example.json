@@ -1,0 +1,13 @@
+{
+  "cv": "YOUR NAME\nYour Title\nYour City, Country\n\nPROFESSIONAL SUMMARY\nA short summary of your experience...\n\nKEY TECHNICAL SKILLS\n...\n\nPROFESSIONAL EXPERIENCE\n...\n\nEDUCATION\n...",
+  "profile": {
+    "name": "Your Name",
+    "title": "Your Job Title",
+    "location": "Your City, Country",
+    "linkedin": "https://www.linkedin.com/in/your-profile/",
+    "portfolio": "https://your-portfolio.example.com/",
+    "skills": ["Skill 1", "Skill 2", "Skill 3"],
+    "experience_years": 3,
+    "languages": ["English (fluent)"]
+  }
+}

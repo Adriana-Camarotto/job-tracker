@@ -1,0 +1,15 @@
+# dependencies
+node_modules/
+dist/
+
+# environment variables - NEVER commit this
+.env
+.env.local
+.env.production
+
+# editor
+.DS_Store
+*.log
+
+# personal data - served by the profile server, never commit
+server/data/profile.json
