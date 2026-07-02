@@ -2,6 +2,8 @@
 
 Track your job applications with an AI assistant: match analysis against your CV, tailored cover letters, CV adaptation, and live job search — all in a fast, local-first React app.
 
+![Job Tracker — application pipeline with AI assistant](docs/screenshot.png)
+
 ## Features
 
 - **Application pipeline** — add, edit and delete applications; filter by status (Applied, Interview, Offer, Rejected)
