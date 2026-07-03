@@ -135,12 +135,15 @@ function extractText(data) {
 // Runs one model turn (resuming across pause_turn for server-side tools) and
 // returns { text, allContent } — text from the final response, allContent from
 // every hop so callers can inspect tool results/errors.
-async function callClaude(systemPrompt, userPrompt, maxTokens = 2000, { tools } = {}) {
+async function callClaude(systemPrompt, userPrompt, maxTokens = 2000, { tools, effort } = {}) {
   const body = {
     model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
+  }
+  if (effort) {
+    body.output_config = { effort }
   }
   if (tools) {
     body.tools = tools
@@ -333,8 +336,14 @@ If you find fewer than ${limit} qualifying listings, return only what you found 
 Candidate profile: ${profile.title}, skills: ${(profile.skills || []).slice(0, 10).join(', ')}, based in ${profile.location}, ${profile.experience_years} years experience.
 Prioritise roles that match React, TypeScript, Next.js experience. Score honestly.
 `
+  // web_search_20250305 (basic variant): the _20260209 version adds dynamic
+  // filtering through server-side code execution, which is thorough but takes
+  // 1-2 minutes per search batch. The basic variant returns results directly
+  // and we do our own URL filtering below. effort:"medium" trims thinking
+  // latency between search rounds without hurting search quality.
   const { text, allContent } = await callClaude(system, prompt, 6000, {
-    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: SEARCH_MAX_USES }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_MAX_USES }],
+    effort: 'medium',
   })
 
   // A web_search_tool_result whose content is an object (not a results array)

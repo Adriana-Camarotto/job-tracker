@@ -307,7 +307,7 @@ function SearchTab() {
 
       <div className={styles.actionRowTop}>
         <button className={styles.btnPrimary} onClick={handleSearch} disabled={!query.trim() || loading}>
-          {loading ? '⏳ Searching...' : '🔍 Search jobs'}
+          {loading ? '⏳ Searching the web (~30s)...' : '🔍 Search jobs'}
         </button>
         <CostBadge usd={searchCost} label={`Cost to search ${limit} jobs`} />
       </div>

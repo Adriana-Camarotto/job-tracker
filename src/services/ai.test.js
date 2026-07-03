@@ -212,8 +212,9 @@ describe('searchJobs', () => {
     await searchJobs('react developer')
     const body = JSON.parse(anthropicCalls()[0][1].body)
     expect(body.tools).toEqual([
-      expect.objectContaining({ type: 'web_search_20260209', name: 'web_search' }),
+      expect.objectContaining({ type: 'web_search_20250305', name: 'web_search' }),
     ])
+    expect(body.output_config).toEqual({ effort: 'medium' })
     expect(body.messages[0].content).toContain('Frontend Developer')
   })
 
