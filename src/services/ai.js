@@ -63,10 +63,12 @@ export const COST_ESTIMATES = {
   },
   search: {
     label: 'Search jobs (per batch)',
-    inputTokens: 6000, // search results are billed as input tokens
+    // Search results + fetched job pages (capped at 4k tokens each) are billed
+    // as input tokens; page fetches themselves are free.
+    inputTokens: 25000,
     outputTokens: 1500,
     searches: SEARCH_MAX_USES,
-    description: 'Searches the live web for real job listings and scores them against your profile',
+    description: 'Searches the live web, then opens each advert to verify it is still accepting applications',
   },
 }
 
@@ -156,8 +158,9 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 2000, { tools, e
   let allContent = [...(data.content || [])]
 
   // Server-side tools can pause mid-turn; resume until the turn completes
+  // (search + per-advert verification can take several tool rounds)
   let continuations = 0
-  while (data.stop_reason === 'pause_turn' && continuations < 3) {
+  while (data.stop_reason === 'pause_turn' && continuations < 5) {
     body.messages = [...body.messages, { role: 'assistant', content: data.content }]
     data = await requestClaude(body)
     allContent = [...allContent, ...(data.content || [])]
@@ -276,6 +279,11 @@ const SEARCH_PAGE_PATTERNS = [
   /\/jobs\/?([?#]|$)/i, // bare .../jobs index page
 ]
 
+// LinkedIn job IDs are sequential; adverts below this threshold are from
+// previous years and long closed. IDs only grow, so the check stays valid —
+// nudge the floor up occasionally (mid-2026 adverts sit around 4.2bn).
+const LINKEDIN_MIN_JOB_ID = 4_000_000_000
+
 export function isDirectJobUrl(url) {
   const safe = safeHttpUrl(url)
   if (!safe) return false
@@ -283,8 +291,14 @@ export function isDirectJobUrl(url) {
   // Board listing pages like totaljobs.com/jobs/react-developer/in-cambridge:
   // a /jobs/ path with no digits anywhere is a category/location index, not a
   // single advert (real adverts carry a numeric ID — reed, linkedin, indeed).
-  const { pathname } = new URL(safe)
+  const { hostname, pathname } = new URL(safe)
   if (/\/jobs\//i.test(pathname) && !/\d/.test(pathname)) return false
+  // Stale LinkedIn adverts: search engines keep old /jobs/view/ pages indexed
+  // for years after they stop accepting applications.
+  if (/(^|\.)linkedin\.com$/i.test(hostname) && /\/jobs\/view\//i.test(pathname)) {
+    const id = Number((pathname.match(/(\d{6,})\/?$/) || [])[1])
+    if (!id || id < LINKEDIN_MIN_JOB_ID) return false
+  }
   return true
 }
 
@@ -311,8 +325,18 @@ How to search effectively — run several distinct searches targeting INDIVIDUAL
 
 STRICT URL RULES:
 - "url" MUST link directly to ONE specific job advert (a page describing a single vacancy).
+- "url" MUST be copied from the SAME search result as the job's title and company — never pair one job's title with another result's URL.
 - NEVER return search-results pages, category pages or job-board indexes. Reject any URL containing search parameters (?q=, ?keywords=, ?search=) or paths like /search or a bare /jobs.
+- LinkedIn /jobs/view/ IDs are sequential: IDs below 4200000000 are adverts from previous years — treat them as expired and discard them.
 - If you cannot find the direct advert URL for a job, leave that job out entirely.
+
+MANDATORY VERIFICATION — never return an advert you know is closed:
+- For every candidate job, try the web_fetch tool on its URL to open the advert page.
+- If the fetched page shows the advert is closed — "No longer accepting applications", "This job has expired", "This position has been filled", "Applications closed", a 404, or a redirect to a search page — DISCARD that job. Never include it.
+- If the fetched page confirms it is still accepting applications, set "verified": true.
+- Some sites (LinkedIn, Indeed) block automated fetching. If the fetch fails or is blocked, KEEP the job but set "verified": false — do not discard it, and do not guess that it is closed.
+- Prefer recently posted adverts; the fresher the posting, the more likely it is still open.
+- Aim to return ${limit} jobs: when verification discards a closed advert, use your remaining searches to find a replacement before answering. Blocked-fetch jobs still count toward the ${limit}.
 
 Return the jobs you found as JSON in this format:
 {
@@ -325,7 +349,8 @@ Return the jobs you found as JSON in this format:
       "posted": "<e.g. 2 days ago, if known>",
       "description": "<2-3 sentence description>",
       "url": "<direct link to the specific job advert>",
-      "match_score": <estimated 0-100 based on candidate profile>
+      "match_score": <estimated 0-100 based on candidate profile>,
+      "verified": <true if you fetched the page and it is still accepting applications, false if the page could not be fetched>
     }
   ],
   "search_tips": ["<tip 1>", "<tip 2>"]
@@ -336,13 +361,18 @@ If you find fewer than ${limit} qualifying listings, return only what you found 
 Candidate profile: ${profile.title}, skills: ${(profile.skills || []).slice(0, 10).join(', ')}, based in ${profile.location}, ${profile.experience_years} years experience.
 Prioritise roles that match React, TypeScript, Next.js experience. Score honestly.
 `
-  // web_search_20250305 (basic variant): the _20260209 version adds dynamic
+  // Basic (non-20260209) tool variants: the newer versions add dynamic
   // filtering through server-side code execution, which is thorough but takes
-  // 1-2 minutes per search batch. The basic variant returns results directly
-  // and we do our own URL filtering below. effort:"medium" trims thinking
-  // latency between search rounds without hurting search quality.
+  // 1-2 minutes per batch. The basic variants return results directly and we
+  // do our own URL filtering below. web_fetch lets the model open each advert
+  // and drop the ones no longer accepting applications; max_content_tokens
+  // caps how much of each page is billed as input. effort:"medium" trims
+  // thinking latency between tool rounds.
   const { text, allContent } = await callClaude(system, prompt, 6000, {
-    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_MAX_USES }],
+    tools: [
+      { type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_MAX_USES },
+      { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 10, max_content_tokens: 4000 },
+    ],
     effort: 'medium',
   })
 

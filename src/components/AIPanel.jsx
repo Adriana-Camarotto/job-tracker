@@ -307,7 +307,7 @@ function SearchTab() {
 
       <div className={styles.actionRowTop}>
         <button className={styles.btnPrimary} onClick={handleSearch} disabled={!query.trim() || loading}>
-          {loading ? '⏳ Searching the web (~30s)...' : '🔍 Search jobs'}
+          {loading ? '⏳ Searching & verifying adverts (~1 min)...' : '🔍 Search jobs'}
         </button>
         <CostBadge usd={searchCost} label={`Cost to search ${limit} jobs`} />
       </div>
@@ -333,7 +333,12 @@ function SearchTab() {
                 <div>
                   <div className={styles.jobTitle}>{job.title}</div>
                   <div className={styles.jobCompany}>{job.company} · {job.location} · {job.type}</div>
-                  {job.posted && <div className={styles.jobPosted}>🕐 {job.posted}</div>}
+                  <div className={styles.jobPosted}>
+                    {job.posted && <>🕐 {job.posted} · </>}
+                    {job.verified
+                      ? <span style={{ color: 'var(--accent)' }}>✓ verified still open</span>
+                      : <span title="LinkedIn/Indeed block automated checks — confirm on the advert page">⚠︎ not verified — check the advert</span>}
+                  </div>
                 </div>
                 <div className={`${styles.scorePill} ${scoreClass(job.match_score)}`}>
                   {job.match_score}%

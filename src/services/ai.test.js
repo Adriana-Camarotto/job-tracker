@@ -157,6 +157,15 @@ describe('isDirectJobUrl', () => {
     expect(isDirectJobUrl('https://www.reed.co.uk/jobs/react-developer/41126705')).toBe(true)
   })
 
+  it('rejects stale LinkedIn adverts by sequential job ID', () => {
+    // old IDs (previous years — long expired)
+    expect(isDirectJobUrl('https://uk.linkedin.com/jobs/view/react-developer-at-acme-2806232155')).toBe(false)
+    expect(isDirectJobUrl('https://www.linkedin.com/jobs/view/3590296972')).toBe(false)
+    // current IDs
+    expect(isDirectJobUrl('https://uk.linkedin.com/jobs/view/react-developer-at-zilch-4218690393')).toBe(true)
+    expect(isDirectJobUrl('https://www.linkedin.com/jobs/view/4151476620/')).toBe(true)
+  })
+
   it('rejects unsafe or missing URLs', () => {
     expect(isDirectJobUrl('javascript:alert(1)')).toBe(false)
     expect(isDirectJobUrl('')).toBe(false)
@@ -176,7 +185,7 @@ describe('searchJobs', () => {
           jobs: [{
             title: 'React Developer',
             description: '<cite index="1-1">Great team</cite> building web apps.',
-            url: 'https://www.linkedin.com/jobs/view/123',
+            url: 'https://www.linkedin.com/jobs/view/4218690123',
           }],
           search_tips: ['<cite index="2-1">Apply early</cite>'],
         }),
@@ -194,7 +203,7 @@ describe('searchJobs', () => {
         type: 'text',
         text: JSON.stringify({
           jobs: [
-            { title: 'Good', url: 'https://www.linkedin.com/jobs/view/123' },
+            { title: 'Good', url: 'https://www.linkedin.com/jobs/view/4218690123' },
             { title: 'Bad listing', url: 'https://uk.indeed.com/jobs?q=react' },
             { title: 'No url' },
           ],
@@ -213,6 +222,7 @@ describe('searchJobs', () => {
     const body = JSON.parse(anthropicCalls()[0][1].body)
     expect(body.tools).toEqual([
       expect.objectContaining({ type: 'web_search_20250305', name: 'web_search' }),
+      expect.objectContaining({ type: 'web_fetch_20250910', name: 'web_fetch' }),
     ])
     expect(body.output_config).toEqual({ effort: 'medium' })
     expect(body.messages[0].content).toContain('Frontend Developer')
