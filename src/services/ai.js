@@ -1,3 +1,5 @@
+import { safeHttpUrl } from '../utils/url'
+
 const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
 
 // The CV/profile lives in the local profile server (server/data/profile.json,
@@ -32,7 +34,7 @@ export const PRICE_OUTPUT_PER_M = () => (isIntroPricing() ? 10.0 : 15.0)
 
 // Web search server tool: $10 per 1,000 searches
 export const WEB_SEARCH_COST_PER_SEARCH = 0.01
-const SEARCH_MAX_USES = 3
+const SEARCH_MAX_USES = 5
 
 // Anthropic bills in USD; the UI displays costs in GBP.
 // Rate as of 2026-07-02 (frankfurter.dev) — override with VITE_USD_TO_GBP.
@@ -61,8 +63,8 @@ export const COST_ESTIMATES = {
   },
   search: {
     label: 'Search jobs (per batch)',
-    inputTokens: 4000, // search results are billed as input tokens
-    outputTokens: 1200,
+    inputTokens: 6000, // search results are billed as input tokens
+    outputTokens: 1500,
     searches: SEARCH_MAX_USES,
     description: 'Searches the live web for real job listings and scores them against your profile',
   },
@@ -113,6 +115,9 @@ async function requestClaude(body) {
       message = err.error?.message || message
     } catch {
       // non-JSON error body — keep the generic message
+    }
+    if (res.status === 401) {
+      message += ' — check VITE_ANTHROPIC_API_KEY in .env, and restart `pnpm dev` after changing it (Vite only reads .env at startup).'
     }
     throw new Error(message)
   }
@@ -258,6 +263,20 @@ ${jobText}
   return callClaude(system, prompt, 2500)
 }
 
+// Search-results/listing pages are not job adverts — reject them so the UI
+// only ever shows direct links to a single vacancy.
+const SEARCH_PAGE_PATTERNS = [
+  /[?&](q|query|keywords|search|term)=/i, // ...?q=react+developer
+  /\/(search|find-?jobs?|vacancies)([/?]|$)/i, // .../search, /find-jobs
+  /\/jobs\/?([?#]|$)/i, // bare .../jobs index page
+]
+
+export function isDirectJobUrl(url) {
+  const safe = safeHttpUrl(url)
+  if (!safe) return false
+  return !SEARCH_PAGE_PATTERNS.some(p => p.test(safe))
+}
+
 export async function searchJobs(keywords, location = 'UK', timeFilter = 'week', limit = 5) {
   const { profile } = await getProfile()
   const timeLabels = {
@@ -272,7 +291,17 @@ export async function searchJobs(keywords, location = 'UK', timeFilter = 'week',
 
   const prompt = `
 Search the web for up to ${limit} real, current job listings matching: "${keywords}" in ${location}, ${timeLabel}.
-Search job boards such as LinkedIn, Indeed, Reed, and company career pages.
+
+How to search effectively — run several distinct searches targeting INDIVIDUAL job adverts:
+- "${keywords} ${location} site:linkedin.com/jobs/view"
+- "${keywords} ${location} site:uk.indeed.com/viewjob"
+- "${keywords} ${location} site:reed.co.uk/jobs"
+- company career pages ("${keywords} careers ${location}")
+
+STRICT URL RULES:
+- "url" MUST link directly to ONE specific job advert (a page describing a single vacancy).
+- NEVER return search-results pages, category pages or job-board indexes. Reject any URL containing search parameters (?q=, ?keywords=, ?search=) or paths like /search or a bare /jobs.
+- If you cannot find the direct advert URL for a job, leave that job out entirely.
 
 Return the jobs you found as JSON in this format:
 {
@@ -284,20 +313,23 @@ Return the jobs you found as JSON in this format:
       "type": "<full-time/hybrid/remote>",
       "posted": "<e.g. 2 days ago, if known>",
       "description": "<2-3 sentence description>",
-      "url": "<the real URL from the search result>",
+      "url": "<direct link to the specific job advert>",
       "match_score": <estimated 0-100 based on candidate profile>
     }
   ],
   "search_tips": ["<tip 1>", "<tip 2>"]
 }
 
-If you find fewer than ${limit} listings, return only what you found — do not fabricate entries.
+If you find fewer than ${limit} qualifying listings, return only what you found — do not fabricate entries and do not pad with search pages.
 
 Candidate profile: ${profile.title}, skills: ${(profile.skills || []).slice(0, 10).join(', ')}, based in ${profile.location}, ${profile.experience_years} years experience.
 Prioritise roles that match React, TypeScript, Next.js experience. Score honestly.
 `
-  const raw = await callClaude(system, prompt, 4000, {
+  const raw = await callClaude(system, prompt, 6000, {
     tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: SEARCH_MAX_USES }],
   })
-  return parseJson(raw, 'Failed to parse job search results')
+  const data = parseJson(raw, 'Failed to parse job search results')
+  // Belt and braces: drop anything that is not a direct job advert link
+  data.jobs = (data.jobs || []).filter(job => isDirectJobUrl(job.url))
+  return data
 }

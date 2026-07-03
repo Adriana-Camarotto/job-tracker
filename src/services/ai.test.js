@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   estimateCost, formatCost, estimateFullApplication, COST_ESTIMATES,
   PRICE_INPUT_PER_M, PRICE_OUTPUT_PER_M, WEB_SEARCH_COST_PER_SEARCH, USD_TO_GBP,
-  analyseJobMatch, searchJobs,
+  analyseJobMatch, searchJobs, isDirectJobUrl,
 } from './ai'
 
 const PROFILE = {
@@ -133,8 +133,52 @@ describe('analyseJobMatch', () => {
   })
 })
 
+describe('isDirectJobUrl', () => {
+  it('accepts direct job advert URLs', () => {
+    expect(isDirectJobUrl('https://www.linkedin.com/jobs/view/4012345678')).toBe(true)
+    expect(isDirectJobUrl('https://uk.indeed.com/viewjob?jk=abc123')).toBe(true)
+    expect(isDirectJobUrl('https://www.reed.co.uk/jobs/frontend-developer/55512345')).toBe(true)
+    expect(isDirectJobUrl('https://example.com/careers/frontend-engineer')).toBe(true)
+  })
+
+  it('rejects search-results and listing pages', () => {
+    expect(isDirectJobUrl('https://uk.indeed.com/jobs?q=react+developer&l=Cambridge')).toBe(false)
+    expect(isDirectJobUrl('https://www.linkedin.com/jobs/search?keywords=react')).toBe(false)
+    expect(isDirectJobUrl('https://www.reed.co.uk/jobs?keywords=frontend')).toBe(false)
+    expect(isDirectJobUrl('https://www.totaljobs.com/jobs')).toBe(false)
+    expect(isDirectJobUrl('https://example.com/find-jobs/react')).toBe(false)
+    expect(isDirectJobUrl('https://example.com/search?term=developer')).toBe(false)
+  })
+
+  it('rejects unsafe or missing URLs', () => {
+    expect(isDirectJobUrl('javascript:alert(1)')).toBe(false)
+    expect(isDirectJobUrl('')).toBe(false)
+    expect(isDirectJobUrl(undefined)).toBe(false)
+  })
+})
+
 describe('searchJobs', () => {
   beforeEach(() => vi.restoreAllMocks())
+
+  it('filters out search-page URLs from results', async () => {
+    mockFetchOnce({
+      stop_reason: 'end_turn',
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          jobs: [
+            { title: 'Good', url: 'https://www.linkedin.com/jobs/view/123' },
+            { title: 'Bad listing', url: 'https://uk.indeed.com/jobs?q=react' },
+            { title: 'No url' },
+          ],
+          search_tips: [],
+        }),
+      }],
+    })
+    const result = await searchJobs('react')
+    expect(result.jobs).toHaveLength(1)
+    expect(result.jobs[0].title).toBe('Good')
+  })
 
   it('requests the web_search server tool', async () => {
     mockFetchOnce({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"jobs": []}' }] })
@@ -152,7 +196,7 @@ describe('searchJobs', () => {
       content: [
         { type: 'server_tool_use', id: 'x', name: 'web_search', input: {} },
         { type: 'web_search_tool_result', content: [] },
-        { type: 'text', text: '{"jobs": [{"title": "Dev"}' },
+        { type: 'text', text: '{"jobs": [{"title": "Dev", "url": "https://example.com/careers/dev-role"}' },
         { type: 'text', text: '], "search_tips": []}' },
       ],
     })
