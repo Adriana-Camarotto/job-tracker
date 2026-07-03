@@ -355,8 +355,14 @@ Prioritise roles that match React, TypeScript, Next.js experience. Score honestl
     }
     throw err
   }
+  // Web-search citations leak <cite index="..."> tags into the JSON strings —
+  // strip them so the UI shows clean text.
+  const stripCites = v => (typeof v === 'string' ? v.replace(/<\/?cite[^>]*>/g, '') : v)
   // Belt and braces: drop anything that is not a direct job advert link
-  data.jobs = (data.jobs || []).filter(job => isDirectJobUrl(job.url))
+  data.jobs = (data.jobs || [])
+    .filter(job => isDirectJobUrl(job.url))
+    .map(job => Object.fromEntries(Object.entries(job).map(([k, v]) => [k, stripCites(v)])))
+  data.search_tips = (data.search_tips || []).map(stripCites)
 
   if (data.jobs.length === 0 && searchErrors.length > 0) {
     throw new Error(

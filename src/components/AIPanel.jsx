@@ -316,6 +316,12 @@ function SearchTab() {
 
       {results && (
         <div className={styles.results}>
+          {(!results.jobs || results.jobs.length === 0) && (
+            <div className={styles.error}>
+              🔍 No qualifying job adverts found for this search. You were still charged for the
+              web searches — try broader keywords, another location, or a wider time window.
+            </div>
+          )}
           {results.search_tips?.length > 0 && (
             <div className={styles.recommendation}>
               💡 {results.search_tips.join(' · ')}

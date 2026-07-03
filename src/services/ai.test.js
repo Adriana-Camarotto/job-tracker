@@ -167,6 +167,26 @@ describe('isDirectJobUrl', () => {
 describe('searchJobs', () => {
   beforeEach(() => vi.restoreAllMocks())
 
+  it('strips <cite> tags that web-search citations leak into job fields', async () => {
+    mockFetchOnce({
+      stop_reason: 'end_turn',
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          jobs: [{
+            title: 'React Developer',
+            description: '<cite index="1-1">Great team</cite> building web apps.',
+            url: 'https://www.linkedin.com/jobs/view/123',
+          }],
+          search_tips: ['<cite index="2-1">Apply early</cite>'],
+        }),
+      }],
+    })
+    const result = await searchJobs('react')
+    expect(result.jobs[0].description).toBe('Great team building web apps.')
+    expect(result.search_tips[0]).toBe('Apply early')
+  })
+
   it('filters out search-page URLs from results', async () => {
     mockFetchOnce({
       stop_reason: 'end_turn',
