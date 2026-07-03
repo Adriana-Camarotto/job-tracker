@@ -150,6 +150,13 @@ describe('isDirectJobUrl', () => {
     expect(isDirectJobUrl('https://example.com/search?term=developer')).toBe(false)
   })
 
+  it('rejects digitless /jobs/ category pages but keeps adverts with IDs', () => {
+    expect(isDirectJobUrl('https://www.totaljobs.com/jobs/react-developer/in-cambridge')).toBe(false)
+    expect(isDirectJobUrl('https://www.cv-library.co.uk/jobs/frontend/in-london')).toBe(false)
+    expect(isDirectJobUrl('https://www.totaljobs.com/job/react-developer/example-corp-job103456')).toBe(true)
+    expect(isDirectJobUrl('https://www.reed.co.uk/jobs/react-developer/41126705')).toBe(true)
+  })
+
   it('rejects unsafe or missing URLs', () => {
     expect(isDirectJobUrl('javascript:alert(1)')).toBe(false)
     expect(isDirectJobUrl('')).toBe(false)
@@ -203,6 +210,29 @@ describe('searchJobs', () => {
     const result = await searchJobs('react')
     expect(result.jobs).toHaveLength(1)
     expect(result.jobs[0].title).toBe('Dev')
+  })
+
+  it('reports a clear error when the web search tool is rate-limited', async () => {
+    mockFetchOnce({
+      stop_reason: 'end_turn',
+      content: [
+        { type: 'server_tool_use', id: 'x', name: 'web_search', input: {} },
+        { type: 'web_search_tool_result', content: { type: 'web_search_tool_result_error', error_code: 'too_many_requests' } },
+        { type: 'text', text: 'Unable to complete live web searches in this session.' },
+      ],
+    })
+    await expect(searchJobs('react')).rejects.toThrow(/temporarily unavailable \(too_many_requests\)/)
+  })
+
+  it('reports the search error even when the model returns empty jobs JSON', async () => {
+    mockFetchOnce({
+      stop_reason: 'end_turn',
+      content: [
+        { type: 'web_search_tool_result', content: { error_code: 'unavailable' } },
+        { type: 'text', text: '{"jobs": [], "search_tips": []}' },
+      ],
+    })
+    await expect(searchJobs('react')).rejects.toThrow(/temporarily unavailable \(unavailable\)/)
   })
 
   it('resumes when the server pauses the turn', async () => {

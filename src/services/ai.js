@@ -132,6 +132,9 @@ function extractText(data) {
     .join('')
 }
 
+// Runs one model turn (resuming across pause_turn for server-side tools) and
+// returns { text, allContent } — text from the final response, allContent from
+// every hop so callers can inspect tool results/errors.
 async function callClaude(systemPrompt, userPrompt, maxTokens = 2000, { tools } = {}) {
   const body = {
     model: MODEL,
@@ -147,15 +150,14 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 2000, { tools } 
   }
 
   let data = await requestClaude(body)
+  let allContent = [...(data.content || [])]
 
   // Server-side tools can pause mid-turn; resume until the turn completes
   let continuations = 0
   while (data.stop_reason === 'pause_turn' && continuations < 3) {
-    body.messages = [
-      { role: 'user', content: userPrompt },
-      { role: 'assistant', content: data.content },
-    ]
+    body.messages = [...body.messages, { role: 'assistant', content: data.content }]
     data = await requestClaude(body)
+    allContent = [...allContent, ...(data.content || [])]
     continuations++
   }
 
@@ -163,7 +165,7 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 2000, { tools } 
     throw new Error('The request was declined by the model. Try rephrasing the job description.')
   }
 
-  return extractText(data)
+  return { text: extractText(data), allContent }
 }
 
 function parseJson(raw, errorMessage) {
@@ -204,8 +206,8 @@ ${cv}
 JOB DESCRIPTION:
 ${jobText}
 `
-  const raw = await callClaude(system, prompt, 1500)
-  return parseJson(raw, 'Failed to parse job analysis')
+  const { text } = await callClaude(system, prompt, 1500)
+  return parseJson(text, 'Failed to parse job analysis')
 }
 
 export async function generateCoverLetter(jobText, jobTitle, company) {
@@ -233,7 +235,7 @@ Requirements:
 - Do NOT use "I am writing to", "passionate about", "team player", or other clichés
 - Output only the cover letter text, no subject line or metadata
 `
-  return callClaude(system, prompt, 1000)
+  return (await callClaude(system, prompt, 1000)).text
 }
 
 export async function adaptCV(jobText, jobTitle, company) {
@@ -260,7 +262,7 @@ TARGET JOB: ${jobTitle} at ${company}
 JOB DESCRIPTION:
 ${jobText}
 `
-  return callClaude(system, prompt, 2500)
+  return (await callClaude(system, prompt, 2500)).text
 }
 
 // Search-results/listing pages are not job adverts — reject them so the UI
@@ -274,7 +276,13 @@ const SEARCH_PAGE_PATTERNS = [
 export function isDirectJobUrl(url) {
   const safe = safeHttpUrl(url)
   if (!safe) return false
-  return !SEARCH_PAGE_PATTERNS.some(p => p.test(safe))
+  if (SEARCH_PAGE_PATTERNS.some(p => p.test(safe))) return false
+  // Board listing pages like totaljobs.com/jobs/react-developer/in-cambridge:
+  // a /jobs/ path with no digits anywhere is a category/location index, not a
+  // single advert (real adverts carry a numeric ID — reed, linkedin, indeed).
+  const { pathname } = new URL(safe)
+  if (/\/jobs\//i.test(pathname) && !/\d/.test(pathname)) return false
+  return true
 }
 
 export async function searchJobs(keywords, location = 'UK', timeFilter = 'week', limit = 5) {
@@ -325,11 +333,35 @@ If you find fewer than ${limit} qualifying listings, return only what you found 
 Candidate profile: ${profile.title}, skills: ${(profile.skills || []).slice(0, 10).join(', ')}, based in ${profile.location}, ${profile.experience_years} years experience.
 Prioritise roles that match React, TypeScript, Next.js experience. Score honestly.
 `
-  const raw = await callClaude(system, prompt, 6000, {
+  const { text, allContent } = await callClaude(system, prompt, 6000, {
     tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: SEARCH_MAX_USES }],
   })
-  const data = parseJson(raw, 'Failed to parse job search results')
+
+  // A web_search_tool_result whose content is an object (not a results array)
+  // is an error, e.g. {error_code: "too_many_requests"} when the search tool
+  // is rate-limited. Surface that clearly instead of the model's apology text.
+  const searchErrors = allContent
+    .filter(b => b.type === 'web_search_tool_result' && b.content && !Array.isArray(b.content))
+    .map(b => b.content.error_code || 'unknown')
+
+  let data
+  try {
+    data = parseJson(text, 'Failed to parse job search results')
+  } catch (err) {
+    if (searchErrors.length > 0) {
+      throw new Error(
+        `Live web search is temporarily unavailable (${searchErrors[0]}). Wait a minute and try again.`,
+      )
+    }
+    throw err
+  }
   // Belt and braces: drop anything that is not a direct job advert link
   data.jobs = (data.jobs || []).filter(job => isDirectJobUrl(job.url))
+
+  if (data.jobs.length === 0 && searchErrors.length > 0) {
+    throw new Error(
+      `Live web search is temporarily unavailable (${searchErrors[0]}). Wait a minute and try again.`,
+    )
+  }
   return data
 }
