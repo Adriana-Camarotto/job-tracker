@@ -1,135 +1,191 @@
-# Job Tracker
+# AI Job Tracker
 
-Track your job applications with an AI assistant: match analysis against your CV, tailored cover letters, CV adaptation, and live job search — all in a fast, local-first React app.
+This project helps a candidate manage applications in one place while using AI to compare a role against their CV, draft tailored cover letters, adapt CV content, and surface relevant live job listings. The main problem it solves is turning scattered application tracking and ad hoc AI prompting into a single workflow with clear match scoring, cost visibility, and persisted records. The technical interest comes from the React interface, local-first persistence, a small Node profile server, and AI-powered workflows that combine user input, server-side profile data, and validation before sending requests.
 
-![Job Tracker — application pipeline with AI assistant](docs/screenshot.png)
+## Technology Stack
 
-## Features
+* React 18 with Vite
+* JavaScript / JSX
+* CSS Modules for component-level styling
+* Vitest + React Testing Library + jsdom
+* Node.js for the local profile server
+* Anthropic Messages API integration
+* Browser localStorage for application persistence
 
-- **Application pipeline** — add, edit and delete applications; filter by status (Applied, Interview, Offer, Rejected)
-- **AI job analysis** — paste a job description and get a 0–100 match score against your CV, matching skills, gaps and a recommendation
-- **AI cover letters & CV adaptation** — generated per job, tailored to the description
-- **Live job search** — uses Claude's server-side web search to find *real* current listings (no invented jobs or URLs)
-- **Cost transparency** — every AI action shows an upfront cost estimate in pounds before you run it
-- **Private profile server** — your CV/profile lives in a local, git-ignored file served by a tiny zero-dependency Node backend
-- **Attachments & notes** — attach a CV (PDF/DOCX, max 3 MB) and keep notes per application
-- **Local-first** — applications are stored in your browser's localStorage; no account needed
+## Overview
 
-## Setup
+The app gives a user a lightweight job-tracker workflow: they record applications, review AI match results for a job description, and then either generate a cover letter, adapt their CV, or search for live roles using the same profile context. The interface is organised around a single application pipeline where job data can be analysed, saved, filtered by status, and revisited later.
 
-```bash
-pnpm install
-cp .env.example .env                                          # add your Anthropic API key
-cp server/data/profile.example.json server/data/profile.json  # fill in your CV/profile
-pnpm dev                                                      # starts profile server + web app
-```
+Each application is stored locally in the browser, while the CV/profile content is loaded from a local server endpoint rather than being hard-coded into the frontend bundle. That makes the app practical for personal use while keeping the UI focused on application management and AI-assisted decision support.
 
-Open [http://localhost:5173](http://localhost:5173).
+## Key Features
 
-Get an API key at [console.anthropic.com](https://console.anthropic.com). Without a key the tracker still works; only the AI features are disabled.
+* Job application tracking with status-based filtering for applied, interview, offer and rejected records
+* AI-powered job matching through a scored analysis of the job description against the stored CV/profile
+* AI-generated cover letters tailored to the specific role and company
+* CV adaptation that rewrites the profile around the job requirements
+* Live job search that validates and filters result URLs before displaying them
+* Cost estimation for AI actions, displayed in GBP from the model pricing calculations
+* Local-first app data persistence with browser storage
+* Private profile serving from a local Node server instead of storing personal profile data in the repo
+* CV upload support for PDF and DOCX files with a file-size limit
+* Notes and optional job/company links attached to each application record
 
-## Scripts
+## Technical Highlights
 
-| Command | What it does |
-|---|---|
-| `pnpm dev` | Start the profile server (port 8787) **and** the web app together |
-| `pnpm dev:web` / `pnpm dev:server` | Start each one individually |
-| `pnpm build` | Production build (injects a Content-Security-Policy) |
-| `pnpm preview` | Serve the production build locally |
-| `pnpm test` | Run the test suite once (Vitest) |
-| `pnpm test:watch` | Run tests in watch mode |
+The project is structured as a small React application with several distinct responsibilities rather than a single monolithic screen. The main application shell in `App.jsx` coordinates the tracker state, status filters, modal interaction, and the AI panel. The AI panel, in turn, manages async workflows for analysis, cover letters, CV adaptation and job search, with explicit loading, success and error states for each action.
 
-## Testing
+The data layer is separated from the UI. The custom hook `useApplications.js` handles initial state, persistence and updates for application records, while `src/services/ai.js` centralises profile fetching, Anthropic API calls, cost estimation and live-search orchestration. Shared validator logic also lives in `src/utils/url.js`, which enforces HTTP/HTTPS-only URLs and restricts uploaded CV data URLs to the supported formats.
 
-O projeto usa **Vitest** e **React Testing Library**, com **50 testes automatizados** cobrindo comportamento da aplicação, gerenciamento de estado, funções utilitárias e a lógica do serviço de IA.
+Other frontend engineering decisions visible in the code include:
 
-Execute os testes com:
-
-```bash
-pnpm test
-```
-
-Para desenvolvimento iterativo execute em modo watch:
-
-```bash
-pnpm test:watch
-```
-
-## AI model & costs
-
-The app uses **Claude Sonnet 5** (`claude-sonnet-5`) via the Anthropic Messages API.
-
-Anthropic bills in **USD**; the app displays estimates in **GBP** at a configurable rate (default **$1 ≈ £0.75**, rate of 2 Jul 2026 — set `VITE_USD_TO_GBP` in `.env` to adjust). Prices checked July 2026 on [platform.claude.com](https://platform.claude.com/docs/en/about-claude/pricing):
-
-| Item | USD (billed) | ≈ GBP (displayed) |
-|---|---|---|
-| Input tokens (until 31 Aug 2026, introductory) | $2 / MTok | £1.50 / MTok |
-| Output tokens (until 31 Aug 2026, introductory) | $10 / MTok | £7.50 / MTok |
-| Input tokens (from 1 Sep 2026) | $3 / MTok | £2.25 / MTok |
-| Output tokens (from 1 Sep 2026) | $15 / MTok | £11.25 / MTok |
-| Web search (job search feature) | $0.01 per search (up to 3 per job search) | £0.0075 per search |
-
-Typical per-action cost with introductory pricing:
-
-- Analyse job match: ~**£0.008**
-- Cover letter: ~**£0.008**
-- Adapt CV: ~**£0.013**
-- Full bundle (all three): ~**£0.03**
-- Job search (includes live web searches): ~**£0.04**
-
-The in-app "Show cost breakdown" panels compute these from the current prices automatically (the intro→standard price switch happens by date).
-
-## Profile server
-
-Your CV and profile are **not** part of the frontend bundle or the git repository. They live in `server/data/profile.json` (git-ignored) and are served by [server/index.js](server/index.js) — a zero-dependency Node server bound to `127.0.0.1` only:
-
-- `GET /api/profile` — returns `{ cv, profile }` consumed by the AI features
-- `GET /api/health` — liveness check
-
-The Vite dev server proxies `/api` to it, so the frontend just fetches `/api/profile`. To update your CV, edit `server/data/profile.json` and refresh the page.
-
-> **Note:** `server/data/profile.json` is listed in `.gitignore` — double-check it stays untracked before pushing.
-
-## Security notes — read before deploying
-
-⚠️ **This app calls the Anthropic API directly from the browser.** The `VITE_ANTHROPIC_API_KEY` value is embedded in the JavaScript bundle at build time. That is acceptable for a **personal tool running locally**, but it means:
-
-- **Never deploy this build to a public URL** — anyone could extract your API key and spend on your account.
-- For a public deployment, move the Anthropic calls into the profile server (or a serverless function) so the key stays server-side, and remove the `anthropic-dangerous-direct-browser-access` header.
-- `.env` is gitignored — keep it that way. If a key ever leaks, rotate it in the [Anthropic Console](https://console.anthropic.com/settings/keys).
-
-Hardening already in place:
-
-- CV/profile served from a git-ignored file by a localhost-only server (never bundled, never committed)
-- Content-Security-Policy injected into production builds (scripts restricted to same origin; network calls restricted to `api.anthropic.com`)
-- All user- and AI-supplied links are sanitized (only `http`/`https`; CV attachments only `data:application/pdf` / DOCX)
-- CV uploads limited to PDF/DOCX and 3 MB; localStorage quota failures are handled gracefully
-- Delete actions require confirmation
+* CSS Modules for component-level styling and less cross-component coupling
+* asynchronous request handling with try/catch flow and user-facing error display
+* controlled form state for job entries, CV attachments and search filters
+* URL validation before results are accepted or rendered
+* client/server separation through a local profile service and Vite proxy config
+* safeguards around storage quota failures and malformed profile data
 
 ## Architecture
 
-```
+```text
 server/
-├── index.js                 # zero-dep profile server (localhost:8787)
-└── data/
-    ├── profile.example.json # committed template
-    └── profile.json         # YOUR real CV/profile — git-ignored
+├── index.js
+├── data/
+│   ├── profile.example.json
+│   └── profile.json          # local-only profile data, git-ignored
+
 src/
-├── App.jsx                  # layout, stats, filtering
+├── App.jsx                   # app shell, filters, modal orchestration
+├── App.module.css
+├── App.test.jsx
 ├── components/
-│   ├── AIPanel.jsx          # AI assistant (analyse + live job search tabs)
-│   ├── ApplicationCard.jsx  # one application in the list
-│   └── Modal.jsx            # add/edit form with CV upload
+│   ├── AIPanel.jsx           # AI analysis, cover letter, CV generation and search UI
+│   ├── AIPanel.module.css
+│   ├── AIPanel.test.jsx
+│   ├── ApplicationCard.jsx   # individual application card
+│   ├── ApplicationCard.module.css
+│   ├── Modal.jsx             # add/edit application form and CV upload flow
+│   ├── Modal.module.css
+│   └── Modal.test.jsx
 ├── hooks/
-│   └── useApplications.js   # state + localStorage persistence
+│   ├── useApplications.js    # persisted application state and CRUD updates
+│   └── useApplications.test.js
 ├── services/
-│   └── ai.js                # Anthropic API client, profile fetch, cost estimates
-└── utils/
-    └── url.js               # URL sanitization helpers
+│   ├── ai.js                 # Anthropic API calls, profile fetch, pricing and job search logic
+│   └── ai.test.js
+├── utils/
+│   ├── url.js                # URL and CV data validation helpers
+│   └── url.test.js
+├── test/
+│   └── setup.js
+├── index.css
+└── main.jsx
 ```
 
-## Data & privacy
+The main responsibilities are straightforward:
 
-- Applications, notes and CV attachments live only in your browser's localStorage.
-- Your CV/profile lives only in `server/data/profile.json` on your machine.
-- When you use an AI feature, the job description **and your CV** are sent to the Anthropic API.
+* `server/index.js` serves the local profile payload from a localhost-only endpoint at `127.0.0.1:8787`
+* `src/App.jsx` is the application shell and keeps the tracker state harmonised with the UI
+* `src/components/` contains the reusable panels and forms that make up the user journey
+* `src/hooks/useApplications.js` manages the application list and local persistence
+* `src/services/ai.js` keeps model integration, pricing logic and parsed responses separate from rendering
+* `src/utils/url.js` validates user-supplied links and attachment data before they are accepted
+
+## Testing
+
+The project uses Vitest, React Testing Library and jsdom for frontend and service-level verification. The current repository contains 6 test files covering the core user flows and supporting logic, including:
+
+* AI panel behaviour and async user actions
+* application management and filtering
+* modal form interaction and CV upload safeguards
+* AI service request/response parsing and validation logic
+* URL sanitisation and filtering rules
+
+The latest full test run passed with 63 tests passing. The latest coverage result reported 84.39% statement coverage overall across the project. Coverage is produced through V8, and the tests include mocked external AI/service calls where appropriate to validate the real behaviour of the app without depending on live API access.
+
+## Continuous Integration
+
+The CI workflow is defined in `.github/workflows/ci.yml` and currently runs on pushes and pull requests to the main branch. It does the following:
+
+1. checks out the repository
+2. sets up pnpm
+3. sets up Node.js
+4. installs dependencies with the frozen lockfile
+5. runs the test suite
+6. runs the production build
+
+There is no deployment step in the workflow, so this project currently verifies build and test health rather than publishing the app.
+
+## Security & Privacy
+
+This project implements a local-first privacy model rather than a public production auth model. The personal CV/profile is stored in `server/data/profile.json` and is intentionally not committed to the repository; this file is ignored by git via the repository settings in `.gitignore`.
+
+The profile content is served by the local Node server at `127.0.0.1` and exposed through a Vite proxy on `/api/profile`. This keeps the data resident on the machine rather than bundled into the frontend build.
+
+The AI integration currently calls the Anthropic API directly from the browser using `VITE_ANTHROPIC_API_KEY` in the frontend environment. That is workable for a private/local tool, but it also means the API key is exposed to any client running the app, and it is not suitable for a public deployment without moving those requests behind a backend endpoint. This risk is already acknowledged in the current code and configuration, and the project does not claim a production-ready public security model.
+
+In addition, the code does a small amount of sanitisation and validation:
+
+* URL validation allows only HTTP and HTTPS links via `safeHttpUrl`
+* CV attachment data URLs are restricted to PDF and DOCX formats
+* the production build injects a Content Security Policy
+* the profile server binds to localhost only and does not expose the profile on the network
+* application data is stored in browser localStorage rather than a remote database
+
+## Getting Started
+
+Install dependencies and start the app with pnpm:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+This starts the local profile server and the Vite frontend together. The app is served at the local Vite development URL, while the profile and CV data are served from the local profile server.
+
+If you need to set up your personal profile or AI configuration:
+
+```bash
+cp server/data/profile.example.json server/data/profile.json
+
+# Then update the profile data in server/data/profile.json
+
+cp .env.example .env
+
+# Then set VITE_ANTHROPIC_API_KEY in .env if you want the AI features enabled
+```
+
+Available project commands:
+
+```bash
+pnpm dev
+pnpm dev:web
+pnpm dev:server
+pnpm test
+pnpm test:watch
+pnpm exec vitest run --coverage
+pnpm run build
+pnpm preview
+```
+
+## Project Scripts
+
+| Command                           | Purpose                                                               |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `pnpm dev`                        | Starts the local profile server and the Vite dev environment together |
+| `pnpm dev:web`                    | Starts only the Vite frontend                                         |
+| `pnpm dev:server`                 | Starts only the local profile server                                  |
+| `pnpm test`                       | Runs the Vitest suite once                                            |
+| `pnpm test:watch`                 | Runs Vitest in watch mode                                             |
+| `pnpm exec vitest run --coverage` | Runs the suite with V8 coverage reporting                             |
+| `pnpm run build`                  | Produces a production build                                           |
+| `pnpm preview`                    | Serves the production build locally                                   |
+
+## Future Improvements
+
+The clearest next step is architectural rather than feature-driven: move the Anthropic requests behind a dedicated server-side API so the API key remains off the client bundle. That would retain the current frontend behaviour while reducing the security risk of a browser-side key. Beyond that, the current project already demonstrates the main workflow effectively, so the next improvements would likely focus on hardening the server boundary and expanding the test coverage for edge cases.
+
+## Screenshots
+
+Screenshots can be added here to demonstrate the main application workflow, including job analysis, job search and the application tracker.
