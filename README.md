@@ -187,5 +187,12 @@ pnpm preview
 The clearest next step is architectural rather than feature-driven: move the Anthropic requests behind a dedicated server-side API so the API key remains off the client bundle. That would retain the current frontend behaviour while reducing the security risk of a browser-side key. Beyond that, the current project already demonstrates the main workflow effectively, so the next improvements would likely focus on hardening the server boundary and expanding the test coverage for edge cases.
 
 ## Screenshots
+<img width="1912" height="1558" alt="image" src="https://github.com/user-attachments/assets/c8d96d7d-cd9b-482e-8970-1b66e3670792" />
 
-Screenshots can be added here to demonstrate the main application workflow, including job analysis, job search and the application tracker.
+<img width="1912" height="1558" alt="image" src="https://github.com/user-attachments/assets/4add0394-2240-41df-a873-890a49d20626" />
+
+<img width="1912" height="1326" alt="image" src="https://github.com/user-attachments/assets/38857e20-6116-4165-a1ec-ecff08cbe83a" />
+
+
+
+
