@@ -39,6 +39,22 @@ Get an API key at [console.anthropic.com](https://console.anthropic.com). Withou
 | `pnpm test` | Run the test suite once (Vitest) |
 | `pnpm test:watch` | Run tests in watch mode |
 
+## Testing
+
+O projeto usa **Vitest** e **React Testing Library**, com **50 testes automatizados** cobrindo comportamento da aplicação, gerenciamento de estado, funções utilitárias e a lógica do serviço de IA.
+
+Execute os testes com:
+
+```bash
+pnpm test
+```
+
+Para desenvolvimento iterativo execute em modo watch:
+
+```bash
+pnpm test:watch
+```
+
 ## AI model & costs
 
 The app uses **Claude Sonnet 5** (`claude-sonnet-5`) via the Anthropic Messages API.
