@@ -13,3 +13,4 @@ dist/
 
 # personal data - served by the profile server, never commit
 server/data/profile.json
+coverage/
